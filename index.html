@@ -307,6 +307,13 @@
             gain.connect(audioCtx.destination);
             // iOS: start() on a suspended context produces no output; resume first
             audioCtx.resume().then(() => src.start());
+
+            // keep icon in sync when the browser externally changes context state
+            audioCtx.addEventListener('statechange', () => {
+                const running = audioCtx.state === 'running';
+                setSoundIcon(running);
+                if (!running) soundOn = false;
+            });
         }
 
         const btn       = document.getElementById('sound-btn');
@@ -320,19 +327,36 @@
             iconSound.style.display = on ? '' : 'none';
         }
 
+        // pause when tab hides; restore user intent when it returns
+        document.addEventListener('visibilitychange', () => {
+            if (!audioCtx) return;
+            if (document.hidden) {
+                audioCtx.suspend();
+            } else if (soundOn) {
+                audioCtx.resume();
+            }
+        });
+
         btn.addEventListener('click', () => {
             if (!audioCtx) {
-                initAudio(); // first click satisfies the user-gesture requirement
+                initAudio();
                 soundOn = true;
-            } else if (soundOn) {
+                setSoundIcon(true);
+            } else if (audioCtx.state === 'running') {
                 audioCtx.suspend();
                 soundOn = false;
             } else {
                 audioCtx.resume();
                 soundOn = true;
             }
-            setSoundIcon(soundOn);
         });
+
+        // iOS background-return unlock: visibilitychange resume() is blocked without a gesture
+        document.addEventListener('touchend', (e) => {
+            if (audioCtx && soundOn && audioCtx.state === 'suspended' && !btn.contains(e.target)) {
+                audioCtx.resume();
+            }
+        }, { passive: true });
 
         // ─────────────────────────────────────────────────────────────────────────
 

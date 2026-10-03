@@ -274,7 +274,7 @@
         let audioCtx = null;
 
         function initAudio() {
-            audioCtx = new AudioContext();
+            audioCtx = new (window.AudioContext || window.webkitAudioContext)();
 
             const bufLen   = audioCtx.sampleRate * 2;
             const noiseBuf = audioCtx.createBuffer(1, bufLen, audioCtx.sampleRate);
@@ -306,6 +306,8 @@
             f3.connect(gain);
             gain.connect(audioCtx.destination);
             src.start();
+            // iOS starts AudioContext suspended even inside a user-gesture handler
+            audioCtx.resume();
         }
 
         const btn       = document.getElementById('sound-btn');

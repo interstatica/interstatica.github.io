@@ -305,9 +305,8 @@
             f2.connect(f3);
             f3.connect(gain);
             gain.connect(audioCtx.destination);
-            src.start();
-            // iOS starts AudioContext suspended even inside a user-gesture handler
-            audioCtx.resume();
+            // iOS: start() on a suspended context produces no output; resume first
+            audioCtx.resume().then(() => src.start());
         }
 
         const btn       = document.getElementById('sound-btn');

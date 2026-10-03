@@ -1,0 +1,344 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Interstatica</title>
+
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Space+Mono:wght@700&family=VT323&display=swap');
+
+        * {
+            box-sizing: border-box;
+            margin: 0;
+            padding: 0;
+        }
+
+        body, html {
+            width: 100vw;
+            height: 100vh;
+            background-color: #000; /* Strict black background */
+            overflow: hidden;
+            font-family: 'VT323', monospace;
+            user-select: none;
+        }
+
+        .crt-container {
+            width: 100vw;
+            height: 100vh;
+            position: relative;
+            background: #000;
+            overflow: hidden;
+        }
+
+        /* Canvas stretched to fill, rendering natively blocky for retro feel */
+        canvas {
+            width: 100%;
+            height: 100%;
+            display: block;
+            image-rendering: pixelated;
+            position: absolute;
+            z-index: 1;
+            top: 0;
+            left: 0;
+        }
+
+        /* 1. Scanlines */
+        .scanlines {
+            position: absolute;
+            top: 0; left: 0; right: 0; bottom: 0;
+            background: linear-gradient(
+                to bottom,
+                rgba(255,255,255,0),
+                rgba(255,255,255,0) 50%,
+                rgba(0,0,0,0.5) 50%,
+                rgba(0,0,0,0.5)
+            );
+            background-size: 100% 4px;
+            pointer-events: none;
+            z-index: 2;
+        }
+
+        /* 2. Fixed Vignette & Chromatic Edge Bleed */
+        .vignette {
+            position: absolute;
+            top: 0; left: 0; right: 0; bottom: 0;
+            /* Guarantees pure black at the edges */
+            background: radial-gradient(
+                circle at center,
+                transparent 50%,
+                rgba(0,0,0,0.7) 80%,
+                rgba(0,0,0,1) 100%
+            );
+            /* Heavy inset shadow for deep black tube corners */
+            box-shadow: inset 0 0 10vmin black;
+            pointer-events: none;
+            z-index: 3;
+        }
+
+        /* 3. VHS tracking distortion band */
+        .tracking-band {
+            position: absolute;
+            top: 0; left: 0; right: 0; height: 10vh;
+            background: linear-gradient(to bottom,
+                rgba(255,255,255,0) 0%,
+                rgba(255,255,255,0.05) 50%,
+                rgba(255,255,255,0) 100%);
+            z-index: 4;
+            pointer-events: none;
+            animation: tracking 6s infinite linear;
+        }
+
+        @keyframes tracking {
+            0% { transform: translateY(-100%); opacity: 0.1; }
+            40% { opacity: 0.4; }
+            50% { opacity: 0.7; }
+            60% { opacity: 0.4; }
+            100% { transform: translateY(1100%); opacity: 0.1; }
+        }
+
+        /* 4. Full-screen phosphor flicker */
+        .flicker {
+            position: absolute;
+            top: 0; left: 0; right: 0; bottom: 0;
+            background: rgba(0, 0, 0, 0.1);
+            pointer-events: none;
+            z-index: 5;
+            animation: crt-flicker 0.15s infinite;
+        }
+
+        @keyframes crt-flicker {
+            0% { opacity: 0.1; }
+            50% { opacity: 0.3; }
+            100% { opacity: 0.1; }
+        }
+
+        #sound-btn {
+            position: absolute;
+            bottom: 1.6rem;
+            left: 1.6rem;
+            z-index: 10;
+            background: rgba(255, 255, 255, 0.07);
+            border: 1.5px solid rgba(255, 255, 255, 0.2);
+            border-radius: 9999px;
+            width: 44px;
+            height: 44px;
+            padding: 0;
+            cursor: pointer;
+            color: rgba(255, 255, 255, 0.45);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            transition: color 0.15s, border-color 0.15s, background 0.15s;
+        }
+
+        #sound-btn:hover {
+            color: rgba(255, 255, 255, 0.9);
+            border-color: rgba(255, 255, 255, 0.55);
+            background: rgba(255, 255, 255, 0.13);
+        }
+
+        #sound-btn:focus-visible {
+            outline: 2px solid rgba(255, 255, 255, 0.7);
+            outline-offset: 3px;
+        }
+
+        #sound-btn svg {
+            width: 1.2rem;
+            height: 1.2rem;
+            display: block;
+        }
+
+        .osd-text {
+            position: absolute;
+            top: 6vmin;
+            right: 8vmin;
+            font-family: 'Space Mono', monospace;
+            font-size: clamp(1.2rem, 8vw, 7rem);
+            font-weight: 700;
+            color: #fff;
+            z-index: 10;
+            letter-spacing: 0.08em;
+            text-transform: uppercase;
+            /* phosphor glow with chromatic aberration */
+            text-shadow:
+                3px 0px 0px rgba(255, 30, 30, 0.85),
+                -3px 0px 0px rgba(0, 200, 255, 0.85),
+                0 0 20px rgba(255, 255, 255, 0.55),
+                0 0 50px rgba(255, 255, 255, 0.15);
+            animation: text-flicker 4s infinite;
+        }
+
+        @keyframes text-flicker {
+            0%, 29.999%, 32%, 72.999%, 74%, 74.999%, 80%, 100% {
+                opacity: 0.95;
+                text-shadow:
+                    3px 0px 0px rgba(255, 30, 30, 0.85),
+                    -3px 0px 0px rgba(0, 200, 255, 0.85),
+                    0 0 20px rgba(255, 255, 255, 0.55);
+            }
+            30%, 31.999%, 73%, 73.999%, 75%, 79.999% {
+                opacity: 0.4;
+                text-shadow: none;
+            }
+        }
+    </style>
+</head>
+<body>
+
+    <div class="crt-container">
+        <!-- Z-Index 1: Noise -->
+        <canvas id="staticCanvas"></canvas>
+
+        <!-- Overlays -->
+        <div class="scanlines"></div>
+        <div class="vignette"></div>
+        <div class="tracking-band"></div>
+        <div class="flicker"></div>
+
+        <!-- On-Screen Display -->
+        <div class="osd-text">Interstatica</div>
+
+        <button id="sound-btn" aria-label="Toggle sound" title="Toggle sound">
+            <!-- muted by default -->
+            <svg id="icon-muted" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                <polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5"/>
+                <line x1="23" y1="9" x2="17" y2="15"/>
+                <line x1="17" y1="9" x2="23" y2="15"/>
+            </svg>
+            <svg id="icon-sound" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="display:none">
+                <polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5"/>
+                <path d="M19.07 4.93a10 10 0 0 1 0 14.14"/>
+                <path d="M15.54 8.46a5 5 0 0 1 0 7.07"/>
+            </svg>
+        </button>
+    </div>
+
+    <script>
+        const canvas = document.getElementById('staticCanvas');
+        const ctx = canvas.getContext('2d', { alpha: false }); // alpha: false optimizes rendering
+
+        let width, height, imageData, buffer, noiseRow;
+
+        // Resolution divider. Higher number = chunkier/more pixelated static.
+        // A factor of 3 gives a nice retro analog look and vastly improves 60fps performance.
+        const PIXEL_SCALE = 3;
+        // Channel shift in internal pixels; each maps to PIXEL_SCALE display pixels
+        const CA_SHIFT = 1;
+
+        function resizeCanvas() {
+            // Calculate internal canvas dimensions
+            width = Math.ceil(window.innerWidth / PIXEL_SCALE);
+            height = Math.ceil(window.innerHeight / PIXEL_SCALE);
+
+            canvas.width = width;
+            canvas.height = height;
+
+            // Re-allocate memory buffer for the new size
+            imageData = ctx.createImageData(width, height);
+
+            // Link a 32-bit array to the image data buffer for extremely fast pixel manipulation
+            buffer = new Uint32Array(imageData.data.buffer);
+
+            // Pre-allocate wider scratch row to avoid per-frame GC pressure
+            noiseRow = new Uint8Array(width + CA_SHIFT * 2);
+        }
+
+        // Handle window resize dynamically to prevent stretching
+        window.addEventListener('resize', resizeCanvas);
+
+        // Initial setup run
+        resizeCanvas();
+
+        function drawStatic() {
+            for (let y = 0; y < height; y++) {
+                // Fill scratch row with fresh noise
+                for (let i = 0, rlen = noiseRow.length; i < rlen; i++) {
+                    noiseRow[i] = Math.random() * 255 | 0;
+                }
+                // Sample R, G, B from staggered positions — chromatic aberration
+                const row = y * width;
+                for (let x = 0; x < width; x++) {
+                    buffer[row + x] = (255 << 24)
+                        | (noiseRow[x + CA_SHIFT * 2]        << 16)   // B: rightmost
+                        | ((noiseRow[x + CA_SHIFT] * 0.85 | 0) <<  8)  // G: lightly attenuated
+                        |  noiseRow[x];                                // R: leftmost
+                }
+            }
+
+            ctx.putImageData(imageData, 0, 0);
+            requestAnimationFrame(drawStatic);
+        }
+
+        // ── Audio static ──────────────────────────────────────────────────────────
+        let audioCtx = null;
+
+        function initAudio() {
+            audioCtx = new AudioContext();
+
+            const bufLen   = audioCtx.sampleRate * 2;
+            const noiseBuf = audioCtx.createBuffer(1, bufLen, audioCtx.sampleRate);
+            const data     = noiseBuf.getChannelData(0);
+            for (let i = 0; i < bufLen; i++) data[i] = Math.random() * 2 - 1;
+
+            // three cascaded lowpass stages = 36 dB/oct rolloff
+            const mkLP = (freq) => {
+                const f = audioCtx.createBiquadFilter();
+                f.type = 'lowpass';
+                f.frequency.value = freq;
+                f.Q.value = 0.8;
+                return f;
+            };
+            const f1 = mkLP(1800);
+            const f2 = mkLP(1800);
+            const f3 = mkLP(1800);
+
+            const gain = audioCtx.createGain();
+            gain.gain.value = 0.09;
+
+            const src = audioCtx.createBufferSource();
+            src.buffer = noiseBuf;
+            src.loop   = true;
+
+            src.connect(f1);
+            f1.connect(f2);
+            f2.connect(f3);
+            f3.connect(gain);
+            gain.connect(audioCtx.destination);
+            src.start();
+        }
+
+        const btn       = document.getElementById('sound-btn');
+        const iconMuted = document.getElementById('icon-muted');
+        const iconSound = document.getElementById('icon-sound');
+
+        let soundOn = false;
+
+        function setSoundIcon(on) {
+            iconMuted.style.display = on ? 'none' : '';
+            iconSound.style.display = on ? '' : 'none';
+        }
+
+        btn.addEventListener('click', () => {
+            if (!audioCtx) {
+                initAudio(); // first click satisfies the user-gesture requirement
+                soundOn = true;
+            } else if (soundOn) {
+                audioCtx.suspend();
+                soundOn = false;
+            } else {
+                audioCtx.resume();
+                soundOn = true;
+            }
+            setSoundIcon(soundOn);
+        });
+
+        // ─────────────────────────────────────────────────────────────────────────
+
+        // Start the engine once the window finishes loading
+        window.onload = () => {
+            drawStatic();
+        };
+    </script>
+</body>
+</html>
